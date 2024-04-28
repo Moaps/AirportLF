@@ -80,8 +80,13 @@ class Grafo:
                                    weight=random.randint(1, 10))  # Adiciona a rota inversa
         return self.grafo
 
-    def adicionar_obstaculo(grafo, origem, destino):
-        if grafo.has_edge(origem, destino):
-            grafo.remove_edge(origem, destino)
-        if grafo.has_edge(destino, origem):  # Se o grafo for não direcionado
-            grafo.remove_edge(destino, origem)
+    def bloquear_rotas(self, grafo):
+        quantidade = random.randint(0, 3)
+        arestas = list(grafo.edges())
+        random.shuffle(arestas)  # Embaralha as arestas para bloquear aleatoriamente
+
+        bloqueadas = arestas[:quantidade]
+        for origem, destino in bloqueadas:
+            grafo.remove_edge(origem, destino)  # Remove a rota do grafo
+
+        return bloqueadas  # Retorna as rotas bloqueadas para uso posterior

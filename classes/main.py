@@ -1,12 +1,15 @@
 import customtkinter
+from customtkinter import CTk
 import networkx as nx
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import grafo as gr
-import buscas as bu
+import tkinter as tk
+from tkinter import messagebox
+import buscas
 
 customtkinter.set_appearance_mode(
-    "Light"
+    "System"
 )
 customtkinter.set_default_color_theme(
     "green"
@@ -14,9 +17,8 @@ customtkinter.set_default_color_theme(
 
 # Criação do grafo
 rotaFinal = nx.DiGraph()
-
-randomgraph = 0
-runCount = 0
+grafoInicial = nx.DiGraph()
+rotasBloqueadas = None
 
 # Lista de aeroportos
 aeroportos = [
@@ -39,11 +41,11 @@ class App(customtkinter.CTk):
 
         # Configurando a janela
         self.title("Aeroporto")
-        self.geometry(f"{1100}x{580}")
+        self.geometry(self.CentralizarJanela(1100, 580, self._get_window_scaling()))
 
         # Configurando o layout de grade
         self.grid_columnconfigure(1, weight=1)
-        self.grid_rowconfigure((0, 1, 2, 3), weight=1)
+        self.grid_rowconfigure(0, weight=1)
 
         #
         # Criando uma barra lateral
@@ -85,20 +87,37 @@ class App(customtkinter.CTk):
         # Dropdown - Trocar o Tema
         self.sidebar_Tema = customtkinter.CTkOptionMenu(
             self.sidebar_frame,
-            values=["Light", "Dark", "System"],
+            values=["System", "Light", "Dark"],
             command=self.trocar_tema,
         )
         self.sidebar_Tema.grid(row=20, column=0, padx=20, pady=(10, 10))
 
-        # Janela - Plotagem do Grafo
-        self.figure = plt.figure(figsize=(6, 6))
-        self.canvas = FigureCanvasTkAgg(self.figure, master=self)
-        self.canvas.get_tk_widget().grid(
-            row=0, column=1, padx=(20, 20), pady=(20, 20), sticky="nsew"
+        # Cria Janelas
+        self.frameTab = customtkinter.CTkFrame(self, width=900, corner_radius=0, fg_color="transparent")
+        self.frameTab.grid(row=0, column=1, sticky="nsew")
+        self.frameTab.grid_rowconfigure(0, weight=1)
+        self.frameTab.grid_columnconfigure(0, weight=1)
+        self.tabGrafos = customtkinter.CTkTabview(
+            self.frameTab
         )
+        self.tabGrafos.grid(row=0, column=0, padx=20, pady=20, sticky="nsew")
+        self.tabGrafos.add("Grafo")
+
+        # Janela - Plotagem do Grafo Inicial
+        self.figuraGrafo = plt.figure()
+        self.canvasGrafo = FigureCanvasTkAgg(self.figuraGrafo, master=self.tabGrafos.tab("Grafo"))
+        self.canvasGrafo.get_tk_widget().pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
 
     def trocar_tema(self, new_appearance_mode: str):
         customtkinter.set_appearance_mode(new_appearance_mode)
+
+    def CentralizarJanela(Screen: CTk, width: int, height: int, scale_factor: float = 1.0):
+        """Centers the window to the main display/monitor"""
+        screen_width = Screen.winfo_screenwidth()
+        screen_height = Screen.winfo_screenheight()
+        x = int(((screen_width / 2) - (width / 2)) * scale_factor)
+        y = int(((screen_height / 2) - (height / 1.5)) * scale_factor)
+        return f"{width}x{height}+{x}+{y}"
 
     def grafo_dinamico(self):
         grafo = gr.Grafo.criar_grafo_dinamico(self)
@@ -108,18 +127,25 @@ class App(customtkinter.CTk):
         grafo = gr.Grafo.criar_grafo_fixo(self)
         return grafo
 
+    def bloquear_rotas(self):
+        return gr.Grafo.bloquear_rotas(self, grafoInicial)
+
     def grafo_selecao(self, valor):
+        global grafoInicial, bloqueio
+
         match valor:
             case 1:
-                grafo = self.grafo_dinamico()
-                self.plotagem(grafo)
+                grafoInicial = self.grafo_dinamico()
+                bloqueio = self.bloquear_rotas()
+                self.plotagem(grafoInicial)
                 self.desbloquear_escolhas()
-                self.desbloquear_direcao(grafo)
+                self.desbloquear_direcao(grafoInicial)
             case 2:
-                grafo = self.grafo_fixo()
-                self.plotagem(grafo)
+                grafoInicial = self.grafo_fixo()
+                bloqueio = self.bloquear_rotas()
+                self.plotagem(grafoInicial)
                 self.desbloquear_escolhas()
-                self.desbloquear_direcao(grafo)
+                self.desbloquear_direcao(grafoInicial)
 
     def desbloquear_escolhas(self):
         # Título - Escolha de Metodo
@@ -132,34 +158,14 @@ class App(customtkinter.CTk):
         self.metodo_escolha = customtkinter.CTkOptionMenu(
             self.sidebar_frame,
             values=[
-                "Amplitude",
-                "Profundidade",
-                "Profundidade Limitada",
-                "Aprofundamento",
-                "Bidirecional",
+                "Custo Uniforme",
+                "Greedy",
+                "A*",
+                "Aprofundamento Iterativo A*"
             ],
             dynamic_resizing=False,
         )
         self.metodo_escolha.grid(row=9, column=0, padx=20, pady=(0, 7))
-
-        # Título - Escolha de Bloqueio
-        self.bloqueio_label = customtkinter.CTkLabel(
-            self.sidebar_frame, text="Qtd Bloqueio", anchor="w", justify="left"
-        )
-        self.bloqueio_label.grid(row=10, column=0, padx=20)
-
-        # Dropdown - Escolha de Bloqueio
-        self.bloqueio_escolha = customtkinter.CTkOptionMenu(
-            self.sidebar_frame,
-            values=[
-                "0",
-                "1",
-                "2",
-                "3"
-            ],
-            dynamic_resizing=False,
-        )
-        self.bloqueio_escolha.grid(row=11, column=0, padx=20, pady=(0, 7))
 
         # Botão - Rodar Algorítmo
         self.rodar_algoritmo = customtkinter.CTkButton(
@@ -202,51 +208,119 @@ class App(customtkinter.CTk):
         self.limpar_grafo = customtkinter.CTkButton(
             self.sidebar_frame,
             text="Limpar Grafo",
-            command=lambda: self.plotagem(gr.Grafo.obter_grafo(self)),
+            command=lambda: self.plotagem(grafoInicial),
         )
         self.limpar_grafo.grid(row=13, column=0, padx=20, pady=3)
 
+    def calculate_heuristic(self, grafo, destino):
+        heuristic = {}
+        destino_index = aeroportos.index(destino)
+        for node in grafo.nodes():
+            node_index = aeroportos.index(node)
+            heuristic[node] = abs(destino_index - node_index)  # Diferença de índices como heurística simples
+        return heuristic
+
     def sidebar_metodo_escolhido(self):
+        origem = self.origem_escolhas.get()
+        destino = self.destino_escolhas.get()
+        global rotaFinal
+        rotaFinal = grafoInicial
+
+        heuristic = self.calculate_heuristic(rotaFinal, destino)
+
         match self.metodo_escolha.get():
-            case "Amplitude":
-                rota = bu.Buscas.busca_amplitude(gr.Grafo.obter_grafo(), self.origem_escolhas.get(), self.destino_escolhas.get())
-                if rota != "ERRO":
-                    self.plotagem(rota)
-                print("Amplitude")
-            case "Profundidade":
-                #self.busca_profundidade()
-                print("Profundidade")
-            case "Profundidade Limitada":
-                #self.busca_profundidade_limitada(2)
-                print("Amplitude")
-            case "Aprofundamento":
-                #self.busca_aprofundamento()
-                print("Aprofundamento")
-            case "Bidirecional":
-                #self.busca_bidirecional()
-                print("Bidirecional")
+            case "Custo Uniforme":
+                resultado = buscas.Buscas(rotaFinal).busca_uniforme(origem, destino)
+            case "Greedy":
+                resultado = buscas.Buscas(rotaFinal).greedy(origem, destino, heuristic)
+            case "A*":
+                resultado = buscas.Buscas(rotaFinal).a_star(origem, destino, heuristic)
+            case "Aprofundamento Iterativo A*":
+                resultado = buscas.Buscas(rotaFinal).iterative_deepening_a_star(origem, destino, heuristic)
+
+        if resultado:
+            self.plotagem_com_caminho(rotaFinal, resultado)
+        else:
+            messagebox.showinfo("Resultado", "Não foi encontrado um caminho.")
 
         self.desbloquear_limpar()
 
     def plotagem(self, grafo):
-        self.figure.clear()
-        ax = self.figure.add_subplot(111)
+        self.figuraGrafo.clear()
+        ax = self.figuraGrafo.add_subplot()
         pos = nx.circular_layout(grafo)  # Utilize um algoritmo de layout Circular
         nx.draw(
             grafo,
             pos,
             with_labels=True,
-            node_size=700,
+            node_size=1000,
             node_color="#2cc985",
             font_size=10,
             arrows=False,
             ax=ax,
         )
+
+        # Desenha as rotas bloqueadas em cinza
+        nx.draw_networkx_edges(
+            grafo,
+            pos,
+            edgelist=bloqueio,
+            edge_color='gray',
+            width=2,
+            style='dashed'
+        )
+
         edge_labels = nx.get_edge_attributes(grafo, 'weight')
         nx.draw_networkx_edge_labels(grafo, pos, edge_labels=edge_labels)
         ax.set_title("Grafo de Rotas de Aeroporto")
         ax.axis("off")
-        self.canvas.draw()
+        self.canvasGrafo.draw()
+
+    def plotagem_com_caminho(self, grafo, caminho):
+        self.figuraGrafo.clear()  # Limpa o gráfico anterior
+        ax = self.figuraGrafo.add_subplot()
+        pos = nx.circular_layout(grafo)  # Posicionamento dos nós
+
+        # Desenha o grafo inteiro
+        nx.draw(
+            grafo,
+            pos,
+            with_labels=True,
+            node_size=1000,
+            node_color="#2cc985",
+            font_size=10,
+            arrows=False,
+            ax=ax
+        )
+
+        # Desenha o caminho com uma cor diferente
+        caminho_edges = list(zip(caminho[:-1], caminho[1:]))
+        nx.draw_networkx_edges(
+            grafo,
+            pos,
+            edgelist=caminho_edges,
+            edge_color='red',
+            width=2,
+            arrows=True
+        )
+
+        # Desenha as rotas bloqueadas em cinza
+        nx.draw_networkx_edges(
+            grafo,
+            pos,
+            edgelist=bloqueio,
+            edge_color='gray',
+            width=2,
+            style='dashed'
+        )
+
+        # Etiquetas para os pesos das arestas
+        edge_labels = nx.get_edge_attributes(grafo, 'weight')
+        nx.draw_networkx_edge_labels(grafo, pos, edge_labels=edge_labels)
+
+        ax.set_title("Grafo de Rotas de Aeroporto com Caminho")
+        ax.axis("off")
+        self.canvasGrafo.draw()  # Atualiza o canvas com o novo gráfico
 
 if __name__ == "__main__":
     app = App()
